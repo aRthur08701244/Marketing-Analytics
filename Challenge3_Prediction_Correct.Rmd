@@ -1,0 +1,240 @@
+```{r}
+library(forecast)
+library(fpp2)
+library(ggplot2)
+library(fpp)
+library("readxl")
+library(cat)
+```
+
+474533-466386 # my prediction = 8147
+472018-466386 # reality = 5632
+print(5732) # answer
+
+```{r Decomposition of a Time Series}
+gogoro <- read_excel("./data/gogoro_correct.xlsx")
+class(gogoro)
+gogoro
+```
+
+```{r}
+plot(gogoro)
+```
+
+```{r}
+ts_gogoro = ts(gogoro$Number, frequency = 12, start = c(2018, 1))
+decompose_gogoro = decompose(ts_gogoro, "additive")
+plot(decompose_gogoro)
+```
+
+
+```{r}
+decompose_gogoro = decompose(ts_gogoro, "mult")
+plot(decompose_gogoro)
+# ts.plot(cbind(decompose_gogoro$trend, decompose_gogoro$trend * decompose_gogoro$seasonal), lty = 1:2)
+```
+
+```{r Simple Exponential Smoothing}
+fit1 <- ses(ts_gogoro, alpha=0.2, initial="simple", h=3)
+fit2 <- ses(ts_gogoro, alpha=0.6, initial="simple", h=3)
+fit3 <- ses(ts_gogoro, h=3)
+```
+
+fitted(fit3)
+
+```{r}
+par(mfrow=c(1,1))
+plot(fit1, plot.conf=FALSE, ylab="", xlab="Year", main="", fcol="white", type="o")
+lines(fitted(fit1), col="blue", type="o")
+lines(fitted(fit2), col="red", type="o")
+lines(fitted(fit3), col="green", type="o")
+lines(fit1$mean, col="blue", type="o")
+lines(fit2$mean, col="red", type="o")
+lines(fit3$mean, col="green", type="o")
+legend("topleft",lty=1, col=c(1,"blue","red","green"), c("data", expression(alpha == 0.2), 
+expression(alpha == 0.6), expression(alpha == 0.89)),pch=1)
+```
+
+```{r Train Test Data}
+
+print(ts_gogoro)
+cat('\n')
+
+train <- window(ts_gogoro, end=2022)
+print(train)
+cat('\n')
+
+train <- ts(train[1:length(train)-1], frequency = 12, start = c(2018, 1))
+print(train)
+cat('\n')
+
+test <- window(ts_gogoro, start=2022)
+print(test)
+cat('\n')
+
+```
+
+```{r}
+
+
+```
+
+```{r Holt's Linear Trend}
+library(MLmetrics)
+for (i in 9) {
+  fc <- holt(train, h=i)
+  cat('Without_Damped', ' ')
+  cat(i, ' ')
+  print(MAPE(fc$mean, test))  
+}
+
+for (i in 9) {
+  fc2 <- holt(train, damped=TRUE, phi = NULL, h=i)
+  cat('Damped', ' ')
+  cat(i, ' ')
+  print(MAPE(fc2$mean, test))
+}
+```
+
+```{r}
+autoplot(ts_gogoro) +
+  autolayer(fc, series="Holt's method", PI=FALSE) +
+  autolayer(fc2, series="Damped Holt's method", PI=FALSE) +
+  ggtitle("Forecasts from Holt's method") + xlab("Year") +
+#  ylab("Air passengers in Australia (millions)") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+
+
+```{r Holt-Winters Seasonal Method}
+for (i in 9) {
+  fit1 <- hw(train, seasonal="additive", h=i)
+  cat('Additive', ' ')
+  cat(i, ' ')
+  print(MAPE(fit1$mean, test))
+}
+for (i in 9) {
+  fit2 <- hw(train, seasonal="multiplicative", h=i)
+  cat('Multiplicative', ' ')
+  cat(i, ' ')
+  print(MAPE(fit2$mean, test))
+}
+```
+
+```{r}
+autoplot(ts_gogoro) +
+  autolayer(fit1, series="HW additive forecasts", PI=FALSE) +
+  autolayer(fit2, series="HW multiplicative forecasts",
+    PI=FALSE) +
+  xlab("Year") +
+#  ylab("Visitor nights (millions)") +
+#  ggtitle("International visitors nights in Australia") +
+  guides(colour=guide_legend(title="Forecast"))
+
+```
+
+
+```{r State Space Models}
+fit <- ets(train)
+# fit <- ets(ts_gogoro, lower = c(0.5))
+print(MAPE(forecast(fit, h=9)$mean, test))
+```
+
+
+```{r}
+plot(forecast(fit, h=9))
+fit$par
+```
+
+
+```{r ARIMA}
+fit <- auto.arima(train,seasonal=FALSE)        # selecting model with the smallest AIC
+print(MAPE(forecast(fit, h=9)$mean, test))
+plot(forecast(fit,h=9),include=80)
+```
+
+
+```{r ARIMA}
+
+best_params <- ''
+best_mape <- 10
+
+for (p in 0:5){
+  for (d in 0:5){
+    for (r in 0:5){
+      tryCatch({
+        fit <- Arima(train, order=c(p, d, r))        # selecting model with the smallest AIC
+        params = paste0(p, d, r)
+#        cat(params, ': ')
+#        print(MAPE(forecast(fit, h=9)$mean, test))
+        if (MAPE(forecast(fit, h=9)$mean, test) < best_mape){
+          best_mape = MAPE(forecast(fit, h=9)$mean, test)
+          best_params = params
+        }
+      }, error = function(e) {
+        params = paste0(p, d, r)
+#        print(params)
+      })
+    }
+  }
+}
+print(best_params)
+print(best_mape)
+```
+
+```{r}
+fit <- Arima(train, order=c(0, 0, 0))
+plot(forecast(fit,h=9),include=80)
+```
+
+
+```{r Final Model}
+fit1 <- hw(train, seasonal="multiplicative", h=10)
+MAPE(fit1$mean, test)
+autoplot(ts_gogoro) +
+  autolayer(fit1, series="HW multiplicative forecasts", PI=FALSE) +
+  xlab("Year") +
+  guides(colour=guide_legend(title="Forecast"))
+# Oct 2022	8353
+```
+
+
+```{r Final Prediction}
+fit1 <- hw(ts_gogoro, seasonal="multiplicative", h=1)
+autoplot(ts_gogoro) +
+  autolayer(fit1, series="HW multiplicative forecasts", PI=FALSE) +
+  xlab("Year") +
+  guides(colour=guide_legend(title="Forecast"))
+print(MAPE(round(fit1$mean), c(5732)))
+# Oct 2022	7728
+```
+
+```{r}
+(7728-5732)/5732
+```
+
+用到的方法：
+
+Simple Exponential Smoothing: ?
+Holt's Linear Trend:                          1.096
+Damped Holt's Linear Trend:                   0.9305
+Holt-Winters Seasonal Method - Additive:      0.202
+Holt-Winters Seasonal Method - Mutiplicative: 0.183
+State Space Models:                           0.887
+auto.arima:                                   0.785
+Arima:                                        0.673
+
+```{r}
+fc2 <- holt(ts_gogoro, damped=TRUE, phi = NULL, h=1)
+cat('Damped', ' ')
+print(fc2$mean)
+print(MAPE(round(fc2$mean), c(5732)))
+```
+
+```{r}
+fit <- Arima(ts_gogoro, order=c(0, 0, 0))
+plot(forecast(fit,h=1),include=80)
+print(MAPE(round(fit$coef), c(5732)))
+````
+
+var(ts_gogoro)/mean(ts_gogoro)

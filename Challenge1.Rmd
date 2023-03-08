@@ -1,0 +1,554 @@
+---
+title: "Challenge1"
+output: html_document
+date: "`r Sys.Date()`"
+比較疫情前（2018年）與疫情中（2020年），美國耶誕節假期的線上購物狀況差異
+  資料包含：2018年與2020年全年的線上消費紀錄
+  人口統計變數
+  變數說明
+---
+
+```{r Visit}
+library(data.table)
+
+setwd("./data")
+vv<-fread("visit_dec_2018.csv")
+print(dim(vv))
+print(head(vv))
+```
+
+```{r Visit Preprocess}
+library(lubridate)
+vv$thedate<-parse_date_time(vv$event_date,orders="mdY")
+vv$thetime<-parse_date_time(vv$event_time,orders="HMS")
+
+visit<-setorder(vv, machine_id, event_date, event_time)  # This is the faster approach to sorting via the data.table  package
+head(visit)	
+
+visit2<-subset(visit, select = -c(V1, event_date,event_time))
+head(visit2)
+```
+
+```{r Q1第三點：總共造訪了多少頁面}
+
+visit3<-aggregate(visit2$pages_viewed, list(visit2$machine_id), function(x) sum(x))                                                                               # Much faster, equivalent to the line above
+colnames(visit3) <- c("machine_id","total_pages")                              # Need this line to add the column names
+head(visit3)
+```
+vv$thetime[1:2]
+second(vv$thetime[1])
+minute(vv$thetime[1])
+hour(vv$thetime[1])
+difftime(vv$thetime[2],vv$thetime[1])
+
+```{r Transaction}
+setwd("./data")
+t1<-read.csv("Transactions2018.csv") 
+head(t1)
+```
+
+```{r Transaction Preprocess}
+t1$month<-month(parse_date_time(t1$event_date,orders="mdY"))
+k<-which(t1$month==12)
+tt<-t1[k,]
+trans<-tt[order(tt$machine_id, tt$event_date, tt$event_time),]                 # This is the basic approach to sorting in R
+trans$thedate<-parse_date_time(trans$event_date,orders="mdY")
+trans$thetime<-parse_date_time(trans$event_time,orders="HMS")
+trans2<-subset(trans, select = -c(event_date,event_time))
+head(trans2)
+```
+
+```{r 類題 Q1第二點：各網站總交易金額為多少}
+# 我的aggregate另解
+trans3 <- aggregate(basket_tot ~ machine_id+domain_name, data=trans2, sum)
+trans3 <- setorder(trans3, machine_id, domain_name)
+print(dim(trans3))
+head(trans3)
+class(trans3)
+
+# 老師plyr(dplyr)詳解
+library(plyr)
+trans3<-ddply(trans2, .(machine_id, domain_name) , summarise, domain_tot = sum(as.numeric(basket_tot)))
+print(dim(trans3))
+head(trans3)
+class(trans3)
+```
+
+```{r Q1第二點：總交易金額為多少}
+# 我的aggregate另解
+trans4 <- aggregate(basket_tot ~ machine_id, data=trans2, sum)
+trans4 <- setorder(trans4, machine_id)
+print(dim(trans4))
+head(trans4)
+class(trans4)
+
+
+# 老師plyr(dplyr)詳解
+trans4<-ddply(trans2, .(machine_id) , summarise, id_tot = sum(as.numeric(basket_tot)))  # 
+print(dim(trans4))
+head(trans4)
+class(trans4)
+
+```
+
+```{r 整合visit$transaction}
+dt<-merge(visit3, trans4, by="machine_id", all=TRUE)                           # Get the merged data set
+dt[is.na(dt)] <- 0
+head(dt)
+```
+
+```{r Demographics}
+setwd("./data")
+dd<-fread("Demographics2018.csv")
+head(dd)
+thedata<-merge(dt,dd,by="machine_id")
+head(thedata)
+```
+
+```{r Q1第一題 我的另解}
+library(dplyr)
+rownames(trans2) <- 1:nrow(trans2)
+
+trans21 <- trans2 # trans21為給我亂搞的
+trans21$machine_id <- as.character( factor(trans21$machine_id) )
+
+transx2 <- 
+  trans21 %>%
+  group_by(machine_id, domain_name) %>%
+  tally() %>%
+  group_by(machine_id) %>%
+  tally()
+head(transx2)
+```
+
+```{r Q1第一題 老師詳解}
+library(plyr)
+transx<-ddply(trans2, .(machine_id) , summarize, sites_bought = length(unique(domain_name)))  
+head(transx)
+thedata<-merge(transx,thedata,by="machine_id") 
+thedata[is.na(thedata)] <- 0
+head(thedata)
+```
+
+```{r Q2 我的另解}
+v22 <- as.data.frame(visit2[,c(1,9)])
+v22 <- 
+  v22 %>%
+  group_by(machine_id, domain_name) %>%
+  tally() %>%
+  group_by(domain_name) %>%
+  tally()
+head(v22)
+
+```
+
+```{r Q2 老師詳解}
+vvv<-as.data.frame(visit2[,c(1,9)])
+v2<- aggregate(vvv$machine_id, list(vvv$domain_name), function(x) length(unique(x))) 
+colnames(v2) <- c("domain_name","number_of_unique_visitors") 
+v3<-v2[order(v2$number_of_unique_visitors, decreasing=TRUE),]    
+head(v3,20,row.names = FALSE)
+```
+
+```{r A Solution for Exercise 2}
+tx<-t1
+tx$thedate<-parse_date_time(tx$event_date,orders="mdY")
+tx$w<-strftime(tx$thedate, format = "%V")
+dt<-aggregate(as.numeric(tx$prod_totprice), list(tx$w), sum, na.rm=TRUE)
+colnames(dt) <- c("week","sales")   
+dt<-dt[-1,]
+plot(dt$sales, xaxt = "n", type="l", col="green", lwd=2, xlab = "Week", ylab="Sales")
+# Setting the arguments xaxt or yaxt to "n" of the plot function will avoid plotting the X and Y axis labels, respectively.
+```
+
+# 複習{numeric, categorical, numeric+categorical}這三類的檢定
+
+```{r 前處理}
+library(data.table)
+library(lubridate)
+library(dplyr)
+library (tidyverse)
+library(ggplot2)
+library(psych)
+library(stringr)
+library(lattice)
+library(ggpubr)
+
+library(showtext)
+showtext_auto()
+
+setwd("./data")
+
+# Read in csv file
+transDF_2018 <- read.csv("Transactions2018.csv")
+transDF_2020 <- read.csv("Transactions2020.csv")
+
+# Define function
+preprocessTrans <- function(df){
+  df$event_date <- parse_date_time(df$event_date,orders="mdY")
+  df$event_time <- parse_date_time(df$event_time,orders="HMS")
+  df <- df[which(month(df$event_date) == 12), ]
+  df <- df[which(day(df$event_date) > 9), ]
+  df <- setorder(df, machine_id)
+  return(df)
+}
+
+transDF_2018 <- preprocessTrans(transDF_2018)
+transDF_2020 <- preprocessTrans(transDF_2020)
+
+# View(transDF_2018)
+# View(transDF_2020)
+```
+
+```{r 分成Walmart&Target}
+
+transDF_2018W <- transDF_2018[which(transDF_2018$domain_name == "walmart.com"), ]
+transDF_2018T <- transDF_2018[which(transDF_2018$domain_name == "target.com"), ]
+transDF_2018WT <- transDF_2018[which(transDF_2018$domain_name == "walmart.com" | transDF_2018$domain_name == "target.com"), ]
+
+transDF_2020W <- transDF_2020[which(transDF_2020$domain_name == "walmart.com"), ]
+transDF_2020T <- transDF_2020[which(transDF_2020$domain_name == "target.com"), ]
+transDF_2020WT <- transDF_2020[which(transDF_2020$domain_name == "walmart.com" | transDF_2020$domain_name == "target.com"), ]
+
+transDF_WT <- rbind(transDF_2018WT, transDF_2020WT)
+
+for (i in list(transDF_2018W, transDF_2018T, transDF_2018WT, transDF_2020W, transDF_2020T, transDF_2020WT, transDF_WT)) {
+  print(dim(i))
+}
+
+titleList <- c("2018 Walmart", "2018 Target", "2020 Walmart", "2020 Target")
+
+```
+
+```{r 消費習慣／時間的比較：1. 畫出表格（星期＆小時）}
+# 1. 畫出表格（星期＆小時）
+# 2. 畫出時間histogram and line
+# 3. 檢定：prob. dist. differnce test(two sample propotion test)
+# http://www.sthda.com/english/wiki/ggplot2-histogram-plot-quick-start-guide-r-software-and-data-visualization
+# https://www.tutorialspoint.com/how-to-display-the-curve-on-the-histogram-using-ggplot2-in-r
+# http://www.sthda.com/english/wiki/ggplot2-title-main-axis-and-legend-titles
+
+count <- 1
+
+dayTimeTable <- function(input) {
+  
+  # Hour
+  
+  hourTable <- round(prop.table(table(hour(input$event_time))), 4)*100
+  input$hour <- hour(input$event_time)
+#  hourDF <- as.data.frame(hourTable)
+  
+#  hist(hour(input$event_time), breaks=23, freq=FALSE)
+#  lines(density(hour(input$event_time), bw=10), type="l", col="darkred", lwd=2)
+
+  p <- ggplot(input, aes(x = hour)) + 
+    geom_histogram(aes(y=..count..), bins = 23, colour="black", fill="white") + 
+    geom_density(aes(y=..count..), alpha=.2, fill="#FF6666") +
+    labs(title=titleList[count], x = "Hours in a Day", y = "Number of Transactions") +
+    ylim(0, 370) +
+    stat_bin(aes(y=..count.., label=..count..), geom="text", vjust=-.5)
+  print(p)
+  
+  
+  
+  # Weekday
+  
+  input <- input[which(day(input$event_date) != 31), ]
+#  weekdayTable <- round(prop.table(table(weekdays(input$event_date))), 4)*100
+  weekdayTable <- table(weekdays(input$event_date))
+  names(weekdayTable) <- c("2Tue", "6Sat", "7Sun", "3Wed", "4Thu", "5Fri", "1Mon")
+  weekdayTable <- weekdayTable[order(names(weekdayTable))]
+#  weekdayDF <- as.data.frame(weekdayTable)
+  cat("\n")
+
+  barplot(weekdayTable, ylim=c(min(weekdayTable)-50, max(weekdayTable)+50), xlab = "Weekdays in a Week", ylab = "Number of Transactions", main = titleList[count])
+  
+#  print(weekdays(input$event_date) %>% table() %>% prop.table() %>% {. * 100} %>% round(2) %>% paste("%"))
+#  print(hour(input$event_time) %>% table() %>% prop.table() %>% {. * 100} %>% round(2) %>% paste("%"))
+}
+
+for (i in list(transDF_2018W, transDF_2018T, transDF_2020W, transDF_2020T)) {
+  dayTimeTable(i)
+  count <- count+1
+}
+# deparse(substitute(transDF_2018W))
+```
+
+```{r 銷售額變化比較}
+# 敘述性統計：mean, sd, ... => 界定區段
+# 畫出四者boxplot
+# 畫出表格
+# 畫出時間histogram and line
+# 檢定：anova?
+
+count = 1
+
+whetherHoliday <- function(date) {
+  if (weekdays(date) == '週六' || weekdays(date) == '週日') {
+    return('Weekend')
+  }
+  else {
+    return('Weekday')
+  }
+}
+
+calDailyRevenue <- function(df) {
+  df <- df %>%
+    group_by(event_date) %>% 
+    summarise(Daily_Revenue = sum(prod_totprice))
+  df$DayOrEnd <- unlist( map(df$event_date, whetherHoliday) )
+  
+#  print(df)
+#  print(describe(df$Daily_Revenue))
+#  boxplot(df$Daily_Revenue, horizontal=TRUE)
+#  barplot(df$Daily_Revenue, as.numeric(day(df$event_date)))
+  p <- ggplot(df, aes(x=as.numeric(day(event_date)), y=Daily_Revenue, fill=DayOrEnd)) +
+    geom_bar(stat = "identity") +
+    labs(title=titleList[count], x ="Date in December")
+  print(p)
+
+  p <- ggplot(df, aes(x=as.numeric(day(event_date)), y=Daily_Revenue)) +
+    geom_histogram(stat = "identity", fill="#FF7575") + 
+    geom_smooth(alpha=.2) +
+    labs(title=titleList[count], x ="Date in December")
+  print(p)
+}
+  
+
+for (i in list(transDF_2018W, transDF_2018T, transDF_2020W, transDF_2020T)) {
+  calDailyRevenue(i)
+  count <- count + 1
+}
+
+
+
+tmp_df <- transDF_WT %>%
+  group_by(domain_name, event_date) %>%
+  summarise(Daily_Revenue = sum(prod_totprice))
+  
+boxplot(tmp_df$Daily_Revenue ~ tmp_df$domain_name*year(tmp_df$event_date), horizontal = TRUE, col=c("#00AFBB", "#E7B800"), xlab = "Daily_Revenue", ylab = "交易商家.年份", main="Walmart 與 Target 在 2018 年及 2020 年單日消費總金額 Boxplot")
+
+```
+
+```{r 單筆消費金額比較}
+# 敘述性統計：mean, sd, ... => 界定區段
+# 畫出四者boxplot
+# 畫出表格
+# 畫出時間histogram and line
+# 檢定：anova?
+library(stringr)
+library(ggplot2)
+library(lattice)
+library(ggpubr)
+
+# 同 machine_id, event_date, domain_name 只挑選出一次 basket_tot
+tmp_df <- as.data.frame(transDF_WT %>%
+  group_by(machine_id, event_date, domain_name, basket_tot) %>%
+  summarise())
+
+tmp_df <- tmp_df[which(tmp_df$basket_tot < 400), ]
+
+tmp_name <- unlist(str_split(tmp_df$domain_name, ".com"))
+tmp_df$domain_name <- tmp_name[which(tmp_name != "")]
+tmp_df$year <- as.factor(year(tmp_df$event_date))
+
+boxplot(tmp_df$basket_tot ~ tmp_df$domain_name + tmp_df$year, horizontal = TRUE, col=c("#00AFBB", "#E7B800"), xlab="購物籃總金額", ylab="交易商家.年份", main="Walmart 與 Target 在 2018 年及 2020 年單筆消費總金額 Boxplot") # 用console執行會比較好
+# ggboxplot(tmp_df, "basket_tot", "year", color="domain_name", horizontal = TRUE) # 用console執行會比較好
+histogram(~basket_tot | domain_name + year, data=tmp_df)
+anova(aov(basket_tot ~ domain_name * year, data = tmp_df))
+plot( TukeyHSD(aov(basket_tot ~ domain_name * year, data = tmp_df), conf.level = 0.95), cex.axis=0.5 )
+
+
+```
+
+```{r 品類銷售表現變化比較（看這兩家有哪些品類）：單品價錢}
+# 單品價錢
+# 總銷售額（？）
+# 總銷售商品數
+# regression包含interval and categorical variables?（但我們沒有要預測，好像還不會用到這個）
+# 檢定：paired-difference(pairwise) experiment
+# 檢定比較項目：2018Walmart vs. 2018Target , 2018Walmart vs. 2020Walmart , 2020Walmart vs. 2020Target , 2018Target vs. 2018Target 
+
+# describe(transDF_WT)
+dim(transDF_WT)
+prod_category <- read.csv("./data/prod_category.csv")
+prod_category
+
+tmp_df2 <- merge(transDF_WT, prod_category, by.x="prod_category_id", by.y="ID")
+tmp_df2$Category <- as.factor(tmp_df2$Category)
+tmp_df2$year <- as.factor(year(tmp_df2$event_date))
+tmp_df2$prod_price <- tmp_df2$prod_totprice / tmp_df2$prod_qty
+dim(tmp_df2) # 多了品類、year、prod_price
+length(unique(tmp_df2$Category))
+
+tmp_df2 <- tmp_df2 %>%
+  group_by(year, domain_name, prod_name, prod_price, Category) %>%
+  summarise()
+
+tmp_df2 <- tmp_df2 %>%
+  group_by(year, domain_name, Category) %>%
+  summarise(mean_prod_price = mean(prod_price))
+
+
+tmp_df2_2018T <- tmp_df2 %>% filter(year==2018, domain_name=="target.com") # 品類最少
+tmp_df2_2018W <- tmp_df2 %>% filter(year==2018, domain_name=="walmart.com", Category %in% tmp_df2_2018T$Category)
+tmp_df2_2020W <- tmp_df2 %>% filter(year==2020, domain_name=="walmart.com", Category %in% tmp_df2_2018T$Category)
+tmp_df2_2020T <- tmp_df2 %>% filter(year==2020, domain_name=="target.com", Category %in% tmp_df2_2018T$Category)
+
+
+
+# t.test
+# var.test
+```
+
+```{r}
+t.test(tmp_df2_2018W$mean_prod_price, tmp_df2_2018T$mean_prod_price, alternative="two.sided", paired=TRUE)
+```
+```{r}
+t.test(tmp_df2_2018W$mean_prod_price, tmp_df2_2020W$mean_prod_price, alternative="two.sided", paired=TRUE)
+```
+
+```{r}
+t.test(tmp_df2_2018T$mean_prod_price, tmp_df2_2020T$mean_prod_price, alternative="two.sided", paired=TRUE)
+```
+```{r}
+t.test(tmp_df2_2020W$mean_prod_price, tmp_df2_2020T$mean_prod_price, alternative="two.sided", paired=TRUE)
+```
+
+```{r 品類銷售表現變化比較（看這兩家有哪些品類）：總銷售商品數}
+# 單品價錢
+# 總銷售額（？）
+# 總銷售商品數
+# regression包含interval and categorical variables?（但我們沒有要預測，好像還不會用到這個）
+# 檢定：paired-difference(pairwise) experiment
+# 檢定比較項目：2018Walmart vs. 2018Target , 2018Walmart vs. 2020Walmart , 2020Walmart vs. 2020Target , 2018Target vs. 2018Target 
+
+prod_category <- read.csv("./data/prod_category.csv")
+prod_category
+
+tmp_df2 <- merge(transDF_WT, prod_category, by.x="prod_category_id", by.y="ID")
+tmp_df2$Category <- as.factor(tmp_df2$Category)
+tmp_df2$year <- as.factor(year(tmp_df2$event_date))
+tmp_df2$prod_price <- tmp_df2$prod_totprice / tmp_df2$prod_qty
+dim(tmp_df2) # 多了品類、year、prod_price
+length(unique(tmp_df2$Category))
+
+
+tmp_df2 <- tmp_df2 %>%
+  group_by(year, domain_name, Category) %>%
+  summarise(category_totqty = sum(prod_qty))
+
+
+tmp_df2_2018T <- tmp_df2 %>% filter(year==2018, domain_name=="target.com") # 品類最少
+tmp_df2_2018W <- tmp_df2 %>% filter(year==2018, domain_name=="walmart.com", Category %in% tmp_df2_2018T$Category)
+tmp_df2_2020W <- tmp_df2 %>% filter(year==2020, domain_name=="walmart.com", Category %in% tmp_df2_2018T$Category)
+tmp_df2_2020T <- tmp_df2 %>% filter(year==2020, domain_name=="target.com", Category %in% tmp_df2_2018T$Category)
+
+
+
+# t.test
+# var.test
+```
+
+```{r}
+t.test(tmp_df2_2018W$category_totqty, tmp_df2_2018T$category_totqty, alternative="two.sided", paired=TRUE)
+```
+
+```{r}
+t.test(tmp_df2_2018W$category_totqty, tmp_df2_2020W$category_totqty, alternative="two.sided", paired=TRUE)
+```
+
+```{r}
+t.test(tmp_df2_2018T$category_totqty, tmp_df2_2020T$category_totqty, alternative="two.sided", paired=TRUE)
+```
+
+```{r}
+t.test(tmp_df2_2020W$category_totqty, tmp_df2_2020T$category_totqty, alternative="two.sided", paired=TRUE)
+```
+
+```{r 品類分析：銷量、單品價錢、總營業額}
+# 以年份、商家分成四群，比較單一品類的
+# 1. 銷量
+# 2. 單品價錢分佈boxplot
+# 3. basket_tot分佈boxplot
+
+View(tmp_df2[which(tmp_df2$year == 2018), ])
+View(tmp_df2[which(tmp_df2$year == 2020), ])
+
+tmp_df3 <- merge(transDF_WT, prod_category, by.x="prod_category_id", by.y="ID")
+tmp_df3$Category <- as.factor(tmp_df3$Category)
+tmp_df3$year <- as.factor(year(tmp_df3$event_date))
+tmp_df3$prod_price <- tmp_df3$prod_totprice / tmp_df3$prod_qty
+```
+
+
+```{r 品類分析：服飾配件}
+
+categoryAnalysis <- function(category) {
+  
+  if (category == "全品項") {
+    tmp_df3_cat <- tmp_df2
+  }
+  else {
+    tmp_df3_cat <- tmp_df2[which(tmp_df2$Category == category), ]
+  }
+  
+  tmp_df3_cat$YearDomain <- paste(tmp_df3_cat$year, tmp_df3_cat$domain_name)
+
+  # 銷量
+  p <- ggplot(tmp_df3_cat, aes(x=YearDomain, y=category_totqty, fill=YearDomain)) +
+    geom_bar(stat = "identity") +
+    labs(title=paste("總銷售數量：", category), x ="year * domain_name", y = "Category Total Quantity")
+  print(p)
+  
+  
+  
+  # 單品價錢分佈boxplot
+  if (category == "全品項") {
+    tmp_df3_cat <- tmp_df3
+  }
+  else {
+    tmp_df3_cat <- tmp_df3[which(tmp_df3$Category == category), ]
+  }
+  boxplot(tmp_df3_cat$prod_price ~ tmp_df3_cat$year*tmp_df3_cat$domain_name, horizontal = TRUE, col=c("#00AFBB", "#E7B800"), main = "單品價錢分佈Boxplot", xlab = "單品價錢", ylab = "年份.交易商家", cex.axis=0.45)
+  
+  # basket_tot分佈boxplot
+  tmp_df3_cat <- tmp_df3_cat %>%
+    filter(basket_tot < 2000) %>%
+    group_by(machine_id, event_date, domain_name, basket_tot) %>%
+    summarise(year=year, prod_totprice=prod_totprice)
+  boxplot(tmp_df3_cat$basket_tot ~ tmp_df3_cat$year*tmp_df3_cat$domain_name, horizontal = TRUE, col=c("#00AFBB", "#E7B800"), main = "單筆消費分佈Boxplot", xlab = "單筆消費金額", ylab = "年份.交易商家", cex.axis=0.45)
+  
+  # 總銷售額
+  tmp_df3_cat <- tmp_df3_cat %>%
+    group_by(year, domain_name) %>%
+    mutate(YearDomain = paste(year, domain_name)) %>%
+    mutate(revenue_tot = sum(prod_totprice))
+  p <- ggplot(tmp_df3_cat, aes(x=YearDomain, y=revenue_tot, fill=domain_name)) +
+    geom_bar(stat = "identity") +
+    labs(title=paste("總銷售金額：", category), x ="year * domain_name", y = "Category Total Revenue")
+  print(p)
+  
+}
+
+categoryAnalysis("服飾配件")
+
+# tmp_df2_2018T <- tmp_df2 %>% filter(year==2018, domain_name=="target.com") # 品類最少
+# tmp_df2_2018W <- tmp_df2 %>% filter(year==2018, domain_name=="walmart.com", Category %in% tmp_df2_2018T$Category)
+# tmp_df2_2020W <- tmp_df2 %>% filter(year==2020, domain_name=="walmart.com", Category %in% tmp_df2_2018T$Category)
+# tmp_df2_2020T <- tmp_df2 %>% filter(year==2020, domain_name=="target.com", Category %in% tmp_df2_2018T$Category)
+
+```
+
+```{r 品類分析：居家與廚房}
+categoryAnalysis("居家與廚房")
+
+```
+
+```{r 品類分析：食品}
+categoryAnalysis("食品")
+
+```
+```{r 品類分析：食品}
+categoryAnalysis("全品項")
+```

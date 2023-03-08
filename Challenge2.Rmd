@@ -1,0 +1,200 @@
+```{r}
+library(data.table)
+
+response <- data.frame(fread("./data/response.csv"))
+response
+```
+
+```{r}
+experiment1 <- expand.grid(cat=c("prefer", "bump"), display=c("time", "url"), change=c("toi", "insert"))
+experiment1
+```
+
+```{r}
+experiment2 <- expand.grid(search=c("including", "match"), add=c("all", "notRenew"))
+experiment2
+```
+
+```{r}
+library(conjoint)
+design1<-caFactorialDesign(data=experiment1,type="full")
+design1<-caEncodedDesign(design1)
+design2<-caFactorialDesign(data=experiment2,type="full")
+design2<-caEncodedDesign(design2)
+design2
+```
+
+```{r}
+df <- data.frame (
+  search = c(),
+  add = c()
+)
+
+for (i in c(1:dim(response)[1])) {
+  # print(i)
+  df <- rbind(df, c("Strength", 110, 110))
+}
+
+```
+
+
+```{r}
+rm(list=ls()) 
+library(data.table)
+library(conjoint)
+response1 <- data.frame(fread("./data/select_course.csv"))
+response1$Gender <- factor(response1$Gender)
+response1$Grade <- factor(response1$Grade)
+#response1$Grade <- factor(response1$Grade, levels = c("大二", "大三", "大四", "碩一", "博二"))
+response1$College <- factor(response1$College)
+#response1$College <- factor(response1$College, levels = c("電機資訊學院", "法律學院", "工學院", "管理學院", "理學院", "社會科學院", "生命科學院", "生物資源暨農學院", "文學院", "醫學院"))
+
+#response1[response1$Grade == '大二', 'Grade'] = rep('two', length(response1[response1$Grade == '大二', 'Grade']))
+#response1[response1$Grade == '大三', 'Grade'] = rep('three', length(response1[response1$Grade == '大三', 'Grade']))
+#response1[response1$Grade == '大四', 'Grade'] = rep('four', length(response1[response1$Grade == '大四', 'Grade']))
+#response1[response1$Grade == '碩一', 'Grade'] = rep('five', length(response1[response1$Grade == '碩一', 'Grade']))
+#response1[response1$Grade == '博二', 'Grade'] = rep('seven', length(response1[response1$Grade == '博二', 'Grade']))
+#response1
+
+level1 <- data.frame(c("prefer", "bump", "time", "link", "tow", "insert"))
+Conjoint(response1[, 1], response1[, 2:4], level1)
+
+```
+
+```{r}
+response2 <- data.frame(fread("./data/browse_course.csv"))
+response2$Gender <- factor(response2$Gender)
+response2$Grade <- factor(response2$Grade)
+#response2$Grade <- factor(response2$Grade, levels = c("大二", "大三", "大四", "碩一", "博二"))
+response2$College <- factor(response2$College)
+#response2$College <- factor(response2$College, levels = c("電機資訊學院", "法律學院", "工學院", "管理學院", "理學院", "社會科學院", "生命科學院", "生物資源暨農學院", "文學院", "醫學院"))
+response2
+
+level2 <- data.frame(c("including", "matched", "all-in-once", "no-renew"))
+Conjoint(response2[, 1], response2[, 2:3], level2)
+
+
+```
+response2[response2$Grade == '大二', 'Grade'] = rep('two', length(response2[response2$Grade == '大二', 'Grade']))
+
+Levels: 博二 大二 大三 大四 碩一
+Levels: 電機資訊學院 法律學院 工學院 管理學院 理學院 社會科學院 生命科學院 生物資源暨農學院 文學院 醫學院
+
+```{r 碩一 法律學院}
+
+library(fastDummies)
+library(knitr)
+response1 <- fastDummies::dummy_cols(response1)
+# knitr::kable(response1)
+```
+
+```{r}
+lm1 <- lm(Rating ~ Grade_博二 +Grade_大二 +Grade_大三 +Grade_大四 +Grade_碩一, data=response1)
+summary(lm1)
+lm1 <- lm(Rating ~ College_電機資訊學院 +College_法律學院+ College_工學院+ College_管理學院 +College_理學院+ College_社會科學院+ College_生命科學院+ College_生物資源暨農學院+ College_文學院 +College_醫學院, data=response1)
+# lm1 <- lm(Rating ~ Gender_生理男 +Gender_生理女 +Grade_博二 +Grade_大二 +Grade_大三 +Grade_大四 +Grade_碩一 +College_電機資訊學院 +College_法律學院+ College_工學院+ College_管理學院 +College_理學院+ College_社會科學院+ College_生命科學院+ College_生物資源暨農學院+ College_文學院 +College_醫學院, data=response1)
+summary(lm1)
+```
+
+```{r 碩一 法律學院}
+response2 <- fastDummies::dummy_cols(response2)
+```
+
+```{r}
+lm2 <- lm(Rating ~ Grade_博二 +Grade_大二 +Grade_大三 +Grade_大四 +Grade_碩一, data=response2)
+summary(lm2)
+lm2 <- lm(Rating ~ College_電機資訊學院 +College_法律學院+ College_工學院+ College_管理學院 +College_理學院+ College_社會科學院+ College_生命科學院+ College_生物資源暨農學院+ College_文學院 +College_醫學院, data=response2)
+#lm2 <- lm(Rating ~ Gender_生理男 +Gender_生理女 +Grade_博二 +Grade_大二 +Grade_大三 +Grade_大四 +Grade_碩一 +College_電機資訊學院 +College_法律學院+ College_工學院+ College_管理學院 +College_理學院+ College_社會科學院+ College_生命科學院+ College_生物資源暨農學院+ College_文學院 +College_醫學院, data=response2)
+summary(lm2)
+```
+
+
+```{r}
+# response1_senior <- response1[response1$Grade=="大四", ]
+# response1_senior
+
+# response1_graduate %>%
+#   group_by(By.Category, Display.New.Info., Change.Order) %>%
+#   summarise(avg = mean(Rating))
+
+# Conjoint(response1_senior[, 1], response1_senior[, 2:4], level1)
+```
+
+```{r}
+# response1_science <- response1[response1$College=="理學院", ]
+# response1_science
+
+#response1_law %>%
+#  group_by(By.Category, Display.New.Info., Change.Order) %>%
+#  summarise(avg = mean(Rating))
+
+# Conjoint(response1_science[, 1], response1_science[, 2:4], level1)
+
+```
+
+```{r}
+response1_management <- response1[response1$College=="管理學院", ]
+
+#response1_law %>%
+#  group_by(By.Category, Display.New.Info., Change.Order) %>%
+#  summarise(avg = mean(Rating))
+
+Conjoint(response1_management[, 1], response1_management[, 2:4], level1)
+
+```
+
+```{r}
+# response1_senior <- response1[response1$Grade=="大二", ]
+# response1_science <- response1[response1$College=="理學院", ]
+# response1_senior_science <- response1_senior[response1_senior$College=="理學院", ]
+
+# Conjoint(response1_science[, 1], response1_science[, 2:4], level1)
+```
+
+```{r}
+# response2_graduate <- response2[response2$Grade=="碩一", ]
+# response2_graduate
+
+# Conjoint(response2_graduate[, 1], response2_graduate[, 2:3], level2)
+```
+
+```{r}
+# response2_law <- response2[response2$College=="管理學院", ]
+# response2_law
+
+# Conjoint(response2_law[, 1], response2_law[, 2:3], level2)
+
+```
+
+```{r}
+# response2_senior <- response2[response2$Grade=="大四", ]
+# response2_science <- response2[response2$College=="理學院", ]
+# response2_senior_science <- response2_senior[response2_senior$College=="理學院", ]
+
+# Conjoint(response2_science[, 1], response2_science[, 2:3], level2)
+```
+
+```{r}
+response2_management <- response2[response2$College=="管理學院", ]
+
+#response1_law %>%
+#  group_by(By.Category, Display.New.Info., Change.Order) %>%
+#  summarise(avg = mean(Rating))
+
+Conjoint(response2_management[, 1], response2_management[, 2:3], level2)
+
+```
+Levels: 博二 大二 大三 大四 碩一
+Levels: 電機資訊學院 法律學院 工學院 管理學院 理學院 社會科學院 生命科學院 生物資源暨農學院 文學院 醫學院
+```{r}
+response1_management <- response1[response1$College=="醫學院", ]
+# response1_management <- rbind(response1_management, response1[response1$College=="理學院", ])
+Conjoint(response1_management[, 1], response1_management[, 2:4], level1)
+```
+電機資訊學院 法律學院 工學院 管理學院 理學院 社會科學院 生命科學院 生物資源暨農學院 文學院 醫學院
+```{r}
+response2_management <- response2[response2$College=="理學院", ]
+response2_management <- rbind(response2_management, response2[response2$College=="工學院", ])
+Conjoint(response2_management[, 1], response2_management[, 2:3], level2)
+
+```
